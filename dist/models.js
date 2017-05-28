@@ -21,17 +21,19 @@ var Schema = _mongoose2.default.Schema;
 // Creates Mongoose Schema and Models based on Data Requirements
 // returns model name, generated schema, generated model and schema fields
 function autoGenerateModels(dataRequirements) {
+  var models = {};
 
-  return (0, _keys2.default)(dataRequirements).map(function (modelName) {
+  (0, _keys2.default)(dataRequirements).forEach(function (modelName) {
     var modelFields = dataRequirements[modelName];
     var mongooseSchema = Schema(modelFields);
     var mongooseModel = _mongoose2.default.model(modelName, mongooseSchema);
 
-    return {
-      name: modelName,
+    models[modelName] = {
       schema: mongooseSchema,
       model: mongooseModel,
       fields: modelFields
     };
   });
+
+  return models;
 }

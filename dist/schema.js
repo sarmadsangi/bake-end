@@ -43,6 +43,20 @@ var TYPE_MAP = {
   Number: _graphql.GraphQLID
 };
 
+var getGQLField = function getGQLField(field, ObjectTypes) {
+  if (Array.isArray(field)) {
+    var _keyType = field[0].type.name;
+    var keyRef = field[0].ref;
+    var _gqlType = TYPE_MAP[_keyType];
+
+    return { type: new _graphql.GraphQLList(_gqlType || ObjectTypes[keyRef]) };
+  }
+
+  var keyType = field.type.name;
+  var gqlType = TYPE_MAP[keyType];
+  return { type: gqlType };
+};
+
 // change mongose _id from string to mongoose.Types.ObjectId
 var sanitizeArgs = function sanitizeArgs(args) {
   var id = args.id,
@@ -61,7 +75,7 @@ var getAllPossibleArgsForGetQuery = function getAllPossibleArgsForGetQuery(model
   var args = { id: { type: _graphql.GraphQLID } };
 
   (0, _keys2.default)(modelFields).forEach(function (key) {
-    args[key] = { type: TYPE_MAP[modelFields[key].type.name] };
+    args[key] = getGQLField(modelFields[key]);
   });
 
   return args;
@@ -78,7 +92,7 @@ var getAllPossibleArgsForCreateMutation = function getAllPossibleArgsForCreateMu
   var args = {};
 
   (0, _keys2.default)(modelFields).forEach(function (key) {
-    args[key] = { type: TYPE_MAP[modelFields[key].type.name] };
+    args[key] = getGQLField(modelFields[key]);
   });
 
   return args;
@@ -94,16 +108,15 @@ var getAllPossibleArgsForRemoveMutation = function getAllPossibleArgsForRemoveMu
 // Object types and fields for dataRequirements
 function generateObjectTypes(dataRequirements) {
   // Generate GraphQL Object Types for all Mongo Models
-  return (0, _keys2.default)(dataRequirements).map(function (modelName) {
+  var objectTypes = {};
+  (0, _keys2.default)(dataRequirements).map(function (modelName) {
     var modelFields = dataRequirements[modelName];
 
     // Map Mongo Fields Types to GraphQL Types
     var gqlFields = { id: { type: _graphql.GraphQLID } };
-    (0, _keys2.default)(modelFields).forEach(function (field) {
-      var keyType = modelFields[field].type.name;
-      var gqlType = TYPE_MAP[keyType];
-
-      if (gqlType) gqlFields[field] = { type: gqlType };
+    (0, _keys2.default)(modelFields).forEach(function (k) {
+      var field = modelFields[k];
+      gqlFields[k] = getGQLField(field, objectTypes);
     });
 
     // Create GraphQL Schema Objects
@@ -112,26 +125,24 @@ function generateObjectTypes(dataRequirements) {
       fields: gqlFields
     });
 
-    return {
-      name: modelName,
-      type: gqlObjectType
-    };
+    objectTypes[modelName] = gqlObjectType;
   });
+
+  return objectTypes;
 }
 
 function generateGetQueries(ObjectTypes, modelObjects) {
   var getQueries = {};
 
-  ObjectTypes.forEach(function (objectType) {
+  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
 
-    var modelObject = modelObjects.find(function (m) {
-      return m.name === objectType.name;
-    });
-    getQueries[objectType.name.toLowerCase()] = {
-      type: objectType.type,
+    var modelObject = modelObjects[objectName];
+
+    getQueries[objectName.toLowerCase()] = {
+      type: ObjectTypes[objectName],
       args: getAllPossibleArgsForGetQuery(modelObject.fields),
       resolve: function () {
-        var _ref = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee(_, _ref2) {
+        var _ref = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee(_, _ref2, context) {
           var args = (0, _objectWithoutProperties3.default)(_ref2, []);
           return _regenerator2.default.wrap(function _callee$(_context) {
             while (1) {
@@ -151,7 +162,7 @@ function generateGetQueries(ObjectTypes, modelObjects) {
           }, _callee, this);
         }));
 
-        function resolve(_x, _x2) {
+        function resolve(_x, _x2, _x3) {
           return _ref.apply(this, arguments);
         }
 
@@ -166,14 +177,12 @@ function generateGetQueries(ObjectTypes, modelObjects) {
 function generateListQueries(ObjectTypes, modelObjects) {
   var listQueries = {};
 
-  ObjectTypes.forEach(function (objectType) {
+  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
 
-    var modelObject = modelObjects.find(function (m) {
-      return m.name === objectType.name;
-    });
+    var modelObject = modelObjects[objectName];
 
-    listQueries['list' + objectType.name + 's'] = {
-      type: new _graphql.GraphQLList(objectType.type),
+    listQueries['list' + objectName + 's'] = {
+      type: new _graphql.GraphQLList(ObjectTypes[objectName]),
       args: getAllPossibleArgsForListQuery(modelObject.fields),
       resolve: function () {
         var _ref3 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee2(_, _ref4) {
@@ -198,7 +207,7 @@ function generateListQueries(ObjectTypes, modelObjects) {
           }, _callee2, this);
         }));
 
-        function resolve(_x3, _x4) {
+        function resolve(_x4, _x5) {
           return _ref3.apply(this, arguments);
         }
 
@@ -213,17 +222,15 @@ function generateListQueries(ObjectTypes, modelObjects) {
 function generateCreateMutations(ObjectTypes, modelObjects) {
   var createMutations = {};
 
-  ObjectTypes.forEach(function (objectType) {
+  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
 
-    var modelObject = modelObjects.find(function (m) {
-      return m.name === objectType.name;
-    });
+    var modelObject = modelObjects[objectName];
 
-    createMutations['create' + objectType.name] = {
-      type: objectType.type,
+    createMutations['create' + objectName] = {
+      type: ObjectTypes[objectName],
       args: getAllPossibleArgsForCreateMutation(modelObject.fields),
       resolve: function () {
-        var _ref5 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee3(_, _ref6) {
+        var _ref5 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee3(_, _ref6, context) {
           var args = (0, _objectWithoutProperties3.default)(_ref6, []);
           return _regenerator2.default.wrap(function _callee3$(_context3) {
             while (1) {
@@ -243,7 +250,7 @@ function generateCreateMutations(ObjectTypes, modelObjects) {
           }, _callee3, this);
         }));
 
-        function resolve(_x5, _x6) {
+        function resolve(_x6, _x7, _x8) {
           return _ref5.apply(this, arguments);
         }
 
@@ -258,14 +265,12 @@ function generateCreateMutations(ObjectTypes, modelObjects) {
 function generateUpdateMutations(ObjectTypes, modelObjects) {
   var updateMutations = {};
 
-  ObjectTypes.forEach(function (objectType) {
+  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
 
-    var modelObject = modelObjects.find(function (m) {
-      return m.name === objectType.name;
-    });
+    var modelObject = modelObjects[objectName];
 
-    updateMutations['update' + objectType.name] = {
-      type: objectType.type,
+    updateMutations['update' + objectName] = {
+      type: ObjectTypes[objectName],
       args: getAllPossibleArgsForUpdateMutation(modelObject.fields),
       resolve: function () {
         var _ref7 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee4(_, _ref8) {
@@ -289,7 +294,7 @@ function generateUpdateMutations(ObjectTypes, modelObjects) {
           }, _callee4, this);
         }));
 
-        function resolve(_x7, _x8) {
+        function resolve(_x9, _x10) {
           return _ref7.apply(this, arguments);
         }
 
@@ -304,14 +309,12 @@ function generateUpdateMutations(ObjectTypes, modelObjects) {
 function generateRemoveMutations(ObjectTypes, modelObjects) {
   var removeMutations = {};
 
-  ObjectTypes.forEach(function (objectType) {
+  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
 
-    var modelObject = modelObjects.find(function (m) {
-      return m.name === objectType.name;
-    });
+    var modelObject = modelObjects[objectName];
 
-    removeMutations['remove' + objectType.name] = {
-      type: objectType.type,
+    removeMutations['remove' + objectName] = {
+      type: ObjectTypes[objectName],
       args: getAllPossibleArgsForRemoveMutation(modelObject.fields),
       resolve: function () {
         var _ref9 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee5(_, _ref10) {
@@ -334,7 +337,7 @@ function generateRemoveMutations(ObjectTypes, modelObjects) {
           }, _callee5, this);
         }));
 
-        function resolve(_x9, _x10) {
+        function resolve(_x11, _x12) {
           return _ref9.apply(this, arguments);
         }
 

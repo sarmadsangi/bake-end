@@ -1,8 +1,8 @@
-const BakeEnd = require('../dist/main')
+const BakeEnd = require('../../dist/main')
 
 BakeEnd(
   {
-    mongoURL: 'mongodb://yourmongodb_url/dbname',
+    mongoURL: 'mongodb://yourdbpath',
     dataRequirements: {
       Test: {
         title: { type: String },
