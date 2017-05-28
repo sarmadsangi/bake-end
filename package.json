@@ -1,13 +1,15 @@
 {
   "name": "bake-end",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "Advance backend (GraphQL, ExpressJS, MongoDB) for developers",
   "main": "dist/main.js",
   "repository": "git@github.com:sarmadsangi/bake-end.git",
   "author": "Sarmad Sangi <sarmadsangi@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "babel-runtime": "^6.23.0",
     "body-parser": "^1.17.2",
+    "cors": "^2.8.3",
     "express": "^4.15.3",
     "express-graphql": "^0.6.5",
     "graphql": "^0.9.6",
@@ -26,7 +28,6 @@
     "babel-watch": "^2.0.6"
   },
   "scripts": {
-    "dev": "babel-watch index.js",
     "build": "babel lib --out-dir dist"
   }
 }

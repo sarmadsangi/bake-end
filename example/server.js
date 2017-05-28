@@ -4,7 +4,7 @@ BakeEnd(
   {
     mongoURL: 'mongodb://yourmongodb_url/dbname',
     dataRequirements: {
-      post: {
+      Test: {
         title: { type: String },
         content: { type: String }
       }

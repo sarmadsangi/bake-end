@@ -4,6 +4,10 @@ var _express = require('express');
 
 var _express2 = _interopRequireDefault(_express);
 
+var _cors = require('cors');
+
+var _cors2 = _interopRequireDefault(_cors);
+
 var _mongoose = require('mongoose');
 
 var _mongoose2 = _interopRequireDefault(_mongoose);
@@ -47,8 +51,8 @@ module.exports = function BakeEnd(options) {
   // TODO: use existing app instead of creating one if needed
   var app = (0, _express2.default)();
 
+  app.use((0, _cors2.default)());
   app.use(endpointURL, _bodyParser2.default.json(), (0, _graphqlServerExpress.graphqlExpress)({ schema: gqlSchema }));
-
   if (showGraphiql) app.use('/graphiql', (0, _graphqlServerExpress.graphiqlExpress)({ endpointURL: endpointURL }));
 
   app.listen(port);
