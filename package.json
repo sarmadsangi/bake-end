@@ -32,6 +32,7 @@
   },
   "scripts": {
     "build": "babel lib --out-dir dist",
+    "fix": "prettier --single-quote --no-semi --write lib/*.js",
     "precommit": "lint-staged"
   },
   "lint-staged": {
