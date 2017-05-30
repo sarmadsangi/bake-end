@@ -10,6 +10,8 @@ var _mongoose2 = _interopRequireDefault(_mongoose);
 
 var _graphqlTools = require('graphql-tools');
 
+var _language = require('graphql/language');
+
 var _graphqlServerExpress = require('graphql-server-express');
 
 var _bodyParser = require('body-parser');
@@ -51,12 +53,25 @@ module.exports = function BakeEnd(options) {
   // inject middleware if needed
   // expose DB Models via middleware
   var middlewares = [_bodyParser2.default.json(), function (req, res, next) {
-    gqlMiddleware(req, res, next, dbModels);
+    gqlMiddleware(req, res, next);
   }];
+  //
+  // app.use(endpointURL, middlewares, graphqlExpress({
+  //   schema: gqlSchema,
+  //   context: {}
+  // }))
 
-  app.use(endpointURL, middlewares, (0, _graphqlServerExpress.graphqlExpress)({
-    schema: gqlSchema,
-    context: {}
+  app.use(endpointURL, middlewares, (0, _graphqlServerExpress.graphqlExpress)(function (req, res, next) {
+    var _req$user = req.user,
+        user = _req$user === undefined ? {} : _req$user,
+        _req$permissions = req.permissions,
+        permissions = _req$permissions === undefined ? {} : _req$permissions;
+
+
+    return {
+      schema: gqlSchema,
+      context: { user: user, permissions: permissions }
+    };
   }));
 
   if (showGraphiql) app.use('/graphiql', (0, _graphqlServerExpress.graphiqlExpress)({ endpointURL: endpointURL }));

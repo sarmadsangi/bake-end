@@ -16,6 +16,15 @@ BakeEnd(
         content: { type: String }
       }
     },
+    gqlMiddleware: (req, res, next) => {
+      req.user = {
+        name: 'sarmad'
+      }
+      req.permissions = {
+        Test: { canView: false, canRemove: false, canUpdate: false }
+      }
+      next()
+    },
     app: app
   }
 ).run()
