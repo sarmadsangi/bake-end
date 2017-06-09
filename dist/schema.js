@@ -1,128 +1,186 @@
-'use strict';
+"use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.errorObj = undefined;
 
-var _regenerator = require('babel-runtime/regenerator');
+var _regenerator = require("babel-runtime/regenerator");
 
 var _regenerator2 = _interopRequireDefault(_regenerator);
 
-var _asyncToGenerator2 = require('babel-runtime/helpers/asyncToGenerator');
+var _asyncToGenerator2 = require("babel-runtime/helpers/asyncToGenerator");
 
 var _asyncToGenerator3 = _interopRequireDefault(_asyncToGenerator2);
 
-var _keys = require('babel-runtime/core-js/object/keys');
+var _keys = require("babel-runtime/core-js/object/keys");
 
 var _keys2 = _interopRequireDefault(_keys);
 
-var _extends2 = require('babel-runtime/helpers/extends');
+var _extends2 = require("babel-runtime/helpers/extends");
 
 var _extends3 = _interopRequireDefault(_extends2);
 
-var _objectWithoutProperties2 = require('babel-runtime/helpers/objectWithoutProperties');
+var _objectWithoutProperties2 = require("babel-runtime/helpers/objectWithoutProperties");
 
-var _objectWithoutProperties3 = _interopRequireDefault(_objectWithoutProperties2);
+var _objectWithoutProperties3 = _interopRequireDefault(
+  _objectWithoutProperties2
+);
+
+var _stringify = require("babel-runtime/core-js/json/stringify");
+
+var _stringify2 = _interopRequireDefault(_stringify);
 
 exports.autoGenerateGraphQLSchema = autoGenerateGraphQLSchema;
 
-var _mongoose = require('mongoose');
+var _mongoose = require("mongoose");
 
 var _mongoose2 = _interopRequireDefault(_mongoose);
 
-var _type = require('graphql/type');
+var _type = require("graphql/type");
 
-var _graphql = require('graphql');
+var _graphqlServerExpress = require("graphql-server-express");
 
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+var _graphql = require("graphql");
 
-var TYPE_MAP = {
+function _interopRequireDefault(obj) {
+  return obj && obj.__esModule ? obj : { default: obj };
+}
+
+var ImageInputCustomType = new _graphql.GraphQLInputObjectType({
+  name: "ImageInput",
+  fields: {
+    public_id: { type: _graphql.GraphQLString },
+    url: { type: _graphql.GraphQLString }
+  }
+});
+
+var ImageOutputCustomType = new _graphql.GraphQLObjectType({
+  name: "Image",
+  fields: {
+    public_id: { type: _graphql.GraphQLString },
+    url: { type: _graphql.GraphQLString }
+  }
+});
+
+var INPUT_TYPE_MAP = {
   ObjectId: _graphql.GraphQLID,
   String: _graphql.GraphQLString,
   Boolean: _graphql.GraphQLBoolean,
-  Number: _graphql.GraphQLID
+  Number: _graphql.GraphQLID,
+  Image: ImageInputCustomType
+};
+
+var OUTPUT_TYPE_MAP = {
+  ObjectId: _graphql.GraphQLID,
+  String: _graphql.GraphQLString,
+  Boolean: _graphql.GraphQLBoolean,
+  Number: _graphql.GraphQLID,
+  Image: ImageOutputCustomType
 };
 
 var PERMISSION_ACTION_MAP = {
-  get: 'canView',
-  list: 'canView',
-  create: 'canCreate',
-  update: 'canUpdate',
-  remove: 'canRemove'
+  get: "canView",
+  list: "canView",
+  create: "canCreate",
+  update: "canUpdate",
+  remove: "canRemove"
 };
 
-var permissionDenied = Error('Permission Denied');
+var permissionDenied = Error("Permission Denied");
+var errorObj = (exports.errorObj = function errorObj(obj) {
+  return new Error((0, _stringify2.default)(obj));
+});
 
 var can = function can(modelName, action, permissions) {
-  console.log('action:' + action + ', modelName:' + modelName, permissions);
   var permission = permissions[modelName];
 
-  if (permission) {
-    return permission[action];
-  }
-
+  if (permission) return permission[action];
   return true;
 };
 
-var getGQLField = function getGQLField(field, ObjectTypes) {
+var getGQLField = function getGQLField(field, ObjectTypes, isOutputField) {
+  var typeMap = isOutputField ? OUTPUT_TYPE_MAP : INPUT_TYPE_MAP;
   if (Array.isArray(field)) {
     var _keyType = field[0].type.name;
     var keyRef = field[0].ref;
-    var _gqlType = TYPE_MAP[_keyType];
+    var _gqlType = typeMap[_keyType];
 
-    return { type: new _graphql.GraphQLList(_gqlType || ObjectTypes[keyRef]) };
+    if (keyRef && ObjectTypes && ObjectTypes[keyRef]) {
+      return { type: new _graphql.GraphQLList(ObjectTypes[keyRef]) };
+    }
+
+    return { type: new _graphql.GraphQLList(_gqlType) };
   }
 
-  var keyType = field.type.name;
-  var gqlType = TYPE_MAP[keyType];
+  var keyType = field.type.name || field.type;
+  var gqlType = typeMap[keyType];
   return { type: gqlType };
+};
+
+var getGQLInputField = function getGQLInputField(field, ObjectTypes) {
+  return getGQLField(field, ObjectTypes);
+};
+var getGQLOutputField = function getGQLOutputField(field, ObjectTypes) {
+  return getGQLField(field, ObjectTypes, true);
 };
 
 // change mongose _id from string to mongoose.Types.ObjectId
 var sanitizeArgs = function sanitizeArgs(args) {
   var id = args.id,
-      restOfArgs = (0, _objectWithoutProperties3.default)(args, ['id']);
+    restOfArgs = (0, _objectWithoutProperties3.default)(args, ["id"]);
 
   var sanitizedArgs = (0, _extends3.default)({}, restOfArgs);
 
-  if (id) {
-    sanitizedArgs['_id'] = _mongoose2.default.Types.ObjectId(id);
-  }
-
+  if (id) sanitizedArgs["_id"] = _mongoose2.default.Types.ObjectId(id);
   return sanitizedArgs;
 };
 
-var getAllPossibleArgsForGetQuery = function getAllPossibleArgsForGetQuery(modelFields) {
+var getAllPossibleArgsForGetQuery = function getAllPossibleArgsForGetQuery(
+  modelFields
+) {
   var args = { id: { type: _graphql.GraphQLID } };
 
-  (0, _keys2.default)(modelFields).forEach(function (key) {
-    args[key] = getGQLField(modelFields[key]);
+  (0, _keys2.default)(modelFields).forEach(function(key) {
+    args[key] = getGQLInputField(modelFields[key]);
   });
 
   return args;
 };
 
-var getAllPossibleArgsForListQuery = function getAllPossibleArgsForListQuery(modelFields) {
-  return (0, _extends3.default)({}, getAllPossibleArgsForGetQuery(modelFields), {
-    pageNumber: { type: _graphql.GraphQLInt },
-    pageSize: { type: _graphql.GraphQLInt }
-  });
+var getAllPossibleArgsForListQuery = function getAllPossibleArgsForListQuery(
+  modelFields
+) {
+  return (0, _extends3.default)(
+    {},
+    getAllPossibleArgsForGetQuery(modelFields),
+    {
+      pageNumber: { type: _graphql.GraphQLInt },
+      pageSize: { type: _graphql.GraphQLInt }
+    }
+  );
 };
 
-var getAllPossibleArgsForCreateMutation = function getAllPossibleArgsForCreateMutation(modelFields) {
+var getAllPossibleArgsForCreateMutation = function getAllPossibleArgsForCreateMutation(
+  modelFields
+) {
   var args = {};
 
-  (0, _keys2.default)(modelFields).forEach(function (key) {
-    args[key] = getGQLField(modelFields[key]);
+  (0, _keys2.default)(modelFields).forEach(function(key) {
+    args[key] = getGQLInputField(modelFields[key]);
   });
 
   return args;
 };
 
-var getAllPossibleArgsForUpdateMutation = function getAllPossibleArgsForUpdateMutation(modelFields) {
+var getAllPossibleArgsForUpdateMutation = function getAllPossibleArgsForUpdateMutation(
+  modelFields
+) {
   return getAllPossibleArgsForGetQuery(modelFields);
 };
-var getAllPossibleArgsForRemoveMutation = function getAllPossibleArgsForRemoveMutation(modelFields) {
+var getAllPossibleArgsForRemoveMutation = function getAllPossibleArgsForRemoveMutation(
+  modelFields
+) {
   return getAllPossibleArgsForGetQuery(modelFields);
 };
 
@@ -130,19 +188,19 @@ var getAllPossibleArgsForRemoveMutation = function getAllPossibleArgsForRemoveMu
 function generateObjectTypes(dataRequirements) {
   // Generate GraphQL Object Types for all Mongo Models
   var objectTypes = {};
-  (0, _keys2.default)(dataRequirements).map(function (modelName) {
-    var modelFields = dataRequirements[modelName];
+  (0, _keys2.default)(dataRequirements).map(function(modelName) {
+    var modelFields = dataRequirements[modelName].fields;
 
     // Map Mongo Fields Types to GraphQL Types
     var gqlFields = { id: { type: _graphql.GraphQLID } };
-    (0, _keys2.default)(modelFields).forEach(function (k) {
+    (0, _keys2.default)(modelFields).forEach(function(k) {
       var field = modelFields[k];
-      gqlFields[k] = getGQLField(field, objectTypes);
+      gqlFields[k] = getGQLOutputField(field, objectTypes);
     });
 
     // Create GraphQL Schema Objects
     var gqlObjectType = new _graphql.GraphQLObjectType({
-      name: modelName + 'Type',
+      name: modelName + "Type",
       fields: gqlFields
     });
 
@@ -155,56 +213,65 @@ function generateObjectTypes(dataRequirements) {
 function generateGetQueries(ObjectTypes, modelObjects) {
   var getQueries = {};
 
-  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
-
+  (0, _keys2.default)(ObjectTypes).forEach(function(objectName) {
     var modelObject = modelObjects[objectName];
-    var queryType = 'get';
+    var queryType = "get";
     var queryName = objectName.toLowerCase();
 
     getQueries[queryName] = {
       type: ObjectTypes[objectName],
       args: getAllPossibleArgsForGetQuery(modelObject.fields),
-      resolve: function () {
-        var _ref = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee(_, _ref2, _ref3) {
-          var args = (0, _objectWithoutProperties3.default)(_ref2, []);
-          var permissions = _ref3.permissions;
-          return _regenerator2.default.wrap(function _callee$(_context) {
-            while (1) {
-              switch (_context.prev = _context.next) {
-                case 0:
-                  if (!can(objectName, queryType, permissions)) {
-                    _context.next = 6;
-                    break;
+      resolve: (function() {
+        var _ref = (0, _asyncToGenerator3.default)(
+          _regenerator2.default.mark(function _callee(_, _ref2, _ref3) {
+            var args = (0, _objectWithoutProperties3.default)(_ref2, []);
+            var permissions = _ref3.permissions;
+            return _regenerator2.default.wrap(
+              function _callee$(_context) {
+                while (1) {
+                  switch ((_context.prev = _context.next)) {
+                    case 0:
+                      if (!can(objectName, queryType, permissions)) {
+                        _context.next = 6;
+                        break;
+                      }
+
+                      _context.next = 3;
+                      return modelObject.model
+                        .findOne(sanitizeArgs(args))
+                        .populate("sections");
+
+                    case 3:
+                      _context.t0 = _context.sent;
+                      _context.next = 7;
+                      break;
+
+                    case 6:
+                      _context.t0 = (0, _graphqlServerExpress.formatError)(
+                        errorObj({ _error: "Permission denied" })
+                      );
+
+                    case 7:
+                      return _context.abrupt("return", _context.t0);
+
+                    case 8:
+                    case "end":
+                      return _context.stop();
                   }
-
-                  _context.next = 3;
-                  return modelObject.model.findOne(sanitizeArgs(args));
-
-                case 3:
-                  _context.t0 = _context.sent;
-                  _context.next = 7;
-                  break;
-
-                case 6:
-                  _context.t0 = permissionDenied;
-
-                case 7:
-                  return _context.abrupt('return', _context.t0);
-
-                case 8:
-                case 'end':
-                  return _context.stop();
-              }
-            }
-          }, _callee, this);
-        }));
+                }
+              },
+              _callee,
+              this
+            );
+          })
+        );
 
         function resolve(_x, _x2, _x3) {
           return _ref.apply(this, arguments);
         }
 
         return resolve;
-      }()
+      })()
     };
   });
 
@@ -214,58 +281,70 @@ function generateGetQueries(ObjectTypes, modelObjects) {
 function generateListQueries(ObjectTypes, modelObjects) {
   var listQueries = {};
 
-  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
-
+  (0, _keys2.default)(ObjectTypes).forEach(function(objectName) {
     var modelObject = modelObjects[objectName];
-    var queryType = 'list';
-    var queryName = '' + queryType + objectName + 's';
+    var queryType = "list";
+    var queryName = "" + queryType + objectName + "s";
 
     listQueries[queryName] = {
       type: new _graphql.GraphQLList(ObjectTypes[objectName]),
       args: getAllPossibleArgsForListQuery(modelObject.fields),
-      resolve: function () {
-        var _ref4 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee2(_, _ref5, _ref6) {
-          var pageSize = _ref5.pageSize,
+      resolve: (function() {
+        var _ref4 = (0, _asyncToGenerator3.default)(
+          _regenerator2.default.mark(function _callee2(_, _ref5, _ref6) {
+            var pageSize = _ref5.pageSize,
               pageNumber = _ref5.pageNumber,
-              args = (0, _objectWithoutProperties3.default)(_ref5, ['pageSize', 'pageNumber']);
-          var permissions = _ref6.permissions;
-          return _regenerator2.default.wrap(function _callee2$(_context2) {
-            while (1) {
-              switch (_context2.prev = _context2.next) {
-                case 0:
-                  if (!can(objectName, queryType, permissions)) {
-                    _context2.next = 6;
-                    break;
+              args = (0, _objectWithoutProperties3.default)(_ref5, [
+                "pageSize",
+                "pageNumber"
+              ]);
+            var permissions = _ref6.permissions;
+            return _regenerator2.default.wrap(
+              function _callee2$(_context2) {
+                while (1) {
+                  switch ((_context2.prev = _context2.next)) {
+                    case 0:
+                      if (!can(objectName, queryType, permissions)) {
+                        _context2.next = 6;
+                        break;
+                      }
+
+                      _context2.next = 3;
+                      return modelObject.model
+                        .find(sanitizeArgs(args))
+                        .populate("sections topics");
+
+                    case 3:
+                      _context2.t0 = _context2.sent;
+                      _context2.next = 7;
+                      break;
+
+                    case 6:
+                      _context2.t0 = (0, _graphqlServerExpress.formatError)(
+                        errorObj({ _error: "Permission denied" })
+                      );
+
+                    case 7:
+                      return _context2.abrupt("return", _context2.t0);
+
+                    case 8:
+                    case "end":
+                      return _context2.stop();
                   }
-
-                  _context2.next = 3;
-                  return modelObject.model.find(sanitizeArgs(args));
-
-                case 3:
-                  _context2.t0 = _context2.sent;
-                  _context2.next = 7;
-                  break;
-
-                case 6:
-                  _context2.t0 = permissionDenied;
-
-                case 7:
-                  return _context2.abrupt('return', _context2.t0);
-
-                case 8:
-                case 'end':
-                  return _context2.stop();
-              }
-            }
-          }, _callee2, this);
-        }));
+                }
+              },
+              _callee2,
+              this
+            );
+          })
+        );
 
         function resolve(_x4, _x5, _x6) {
           return _ref4.apply(this, arguments);
         }
 
         return resolve;
-      }()
+      })()
     };
   });
 
@@ -275,55 +354,66 @@ function generateListQueries(ObjectTypes, modelObjects) {
 function generateCreateMutations(ObjectTypes, modelObjects) {
   var createMutations = {};
 
-  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
-
+  (0, _keys2.default)(ObjectTypes).forEach(function(objectName) {
     var modelObject = modelObjects[objectName];
-    var mutationType = 'create';
-    var mutationName = '' + mutationType + objectName;
+    var mutationType = "create";
+    var mutationName = "" + mutationType + objectName;
 
     createMutations[mutationName] = {
       type: ObjectTypes[objectName],
       args: getAllPossibleArgsForCreateMutation(modelObject.fields),
-      resolve: function () {
-        var _ref7 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee3(_, _ref8, context) {
-          var args = (0, _objectWithoutProperties3.default)(_ref8, []);
-          return _regenerator2.default.wrap(function _callee3$(_context3) {
-            while (1) {
-              switch (_context3.prev = _context3.next) {
-                case 0:
-                  if (!can(objectName, mutationType, context)) {
-                    _context3.next = 6;
-                    break;
+      resolve: (function() {
+        var _ref7 = (0, _asyncToGenerator3.default)(
+          _regenerator2.default.mark(function _callee3(_, _ref8, context) {
+            var args = (0, _objectWithoutProperties3.default)(_ref8, []);
+            var beforeCreate, finalObj;
+            return _regenerator2.default.wrap(
+              function _callee3$(_context3) {
+                while (1) {
+                  switch ((_context3.prev = _context3.next)) {
+                    case 0:
+                      beforeCreate = modelObjects[objectName].beforeCreate;
+                      finalObj = beforeCreate ? beforeCreate(args) : args;
+
+                      if (!can(objectName, mutationType, context)) {
+                        _context3.next = 8;
+                        break;
+                      }
+
+                      _context3.next = 5;
+                      return modelObject.model(finalObj).save();
+
+                    case 5:
+                      _context3.t0 = _context3.sent;
+                      _context3.next = 9;
+                      break;
+
+                    case 8:
+                      _context3.t0 = (0, _graphqlServerExpress.formatError)(
+                        errorObj({ _error: "Permission denied" })
+                      );
+
+                    case 9:
+                      return _context3.abrupt("return", _context3.t0);
+
+                    case 10:
+                    case "end":
+                      return _context3.stop();
                   }
-
-                  _context3.next = 3;
-                  return modelObject.model(args).save();
-
-                case 3:
-                  _context3.t0 = _context3.sent;
-                  _context3.next = 7;
-                  break;
-
-                case 6:
-                  _context3.t0 = permissionDenied;
-
-                case 7:
-                  return _context3.abrupt('return', _context3.t0);
-
-                case 8:
-                case 'end':
-                  return _context3.stop();
-              }
-            }
-          }, _callee3, this);
-        }));
+                }
+              },
+              _callee3,
+              this
+            );
+          })
+        );
 
         function resolve(_x7, _x8, _x9) {
           return _ref7.apply(this, arguments);
         }
 
         return resolve;
-      }()
+      })()
     };
   });
 
@@ -333,57 +423,72 @@ function generateCreateMutations(ObjectTypes, modelObjects) {
 function generateUpdateMutations(ObjectTypes, modelObjects) {
   var updateMutations = {};
 
-  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
-
+  (0, _keys2.default)(ObjectTypes).forEach(function(objectName) {
     var modelObject = modelObjects[objectName];
-    var mutationType = 'update';
-    var mutationName = '' + mutationType + objectName;
+    var mutationType = "update";
+    var mutationName = "" + mutationType + objectName;
 
     updateMutations[mutationName] = {
       type: ObjectTypes[objectName],
       args: getAllPossibleArgsForUpdateMutation(modelObject.fields),
-      resolve: function () {
-        var _ref9 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee4(_, _ref10, _ref11) {
-          var id = _ref10.id,
-              args = (0, _objectWithoutProperties3.default)(_ref10, ['id']);
-          var permissions = _ref11.permissions;
-          return _regenerator2.default.wrap(function _callee4$(_context4) {
-            while (1) {
-              switch (_context4.prev = _context4.next) {
-                case 0:
-                  if (!can(objectName, mutationType, permissions)) {
-                    _context4.next = 6;
-                    break;
+      resolve: (function() {
+        var _ref9 = (0, _asyncToGenerator3.default)(
+          _regenerator2.default.mark(function _callee4(_, _ref10, _ref11) {
+            var id = _ref10.id,
+              args = (0, _objectWithoutProperties3.default)(_ref10, ["id"]);
+            var permissions = _ref11.permissions;
+            return _regenerator2.default.wrap(
+              function _callee4$(_context4) {
+                while (1) {
+                  switch ((_context4.prev = _context4.next)) {
+                    case 0:
+                      console.log(id, args);
+
+                      if (!can(objectName, mutationType, permissions)) {
+                        _context4.next = 7;
+                        break;
+                      }
+
+                      _context4.next = 4;
+                      return modelObject.model.findOneAndUpdate(
+                        { _id: id },
+                        args,
+                        {
+                          new: true
+                        }
+                      );
+
+                    case 4:
+                      _context4.t0 = _context4.sent;
+                      _context4.next = 8;
+                      break;
+
+                    case 7:
+                      _context4.t0 = (0, _graphqlServerExpress.formatError)(
+                        errorObj({ _error: "Permission denied" })
+                      );
+
+                    case 8:
+                      return _context4.abrupt("return", _context4.t0);
+
+                    case 9:
+                    case "end":
+                      return _context4.stop();
                   }
-
-                  _context4.next = 3;
-                  return modelObject.model.findOneAndUpdate({ id: id }, args, { new: true });
-
-                case 3:
-                  _context4.t0 = _context4.sent;
-                  _context4.next = 7;
-                  break;
-
-                case 6:
-                  _context4.t0 = permissionDenied;
-
-                case 7:
-                  return _context4.abrupt('return', _context4.t0);
-
-                case 8:
-                case 'end':
-                  return _context4.stop();
-              }
-            }
-          }, _callee4, this);
-        }));
+                }
+              },
+              _callee4,
+              this
+            );
+          })
+        );
 
         function resolve(_x10, _x11, _x12) {
           return _ref9.apply(this, arguments);
         }
 
         return resolve;
-      }()
+      })()
     };
   });
 
@@ -393,55 +498,62 @@ function generateUpdateMutations(ObjectTypes, modelObjects) {
 function generateRemoveMutations(ObjectTypes, modelObjects) {
   var removeMutations = {};
 
-  (0, _keys2.default)(ObjectTypes).forEach(function (objectName) {
-
+  (0, _keys2.default)(ObjectTypes).forEach(function(objectName) {
     var modelObject = modelObjects[objectName];
-    var mutationType = 'remove';
-    var mutationName = '' + mutationType + objectName;
+    var mutationType = "remove";
+    var mutationName = "" + mutationType + objectName;
 
     removeMutations[mutationName] = {
       type: ObjectTypes[objectName],
       args: getAllPossibleArgsForRemoveMutation(modelObject.fields),
-      resolve: function () {
-        var _ref12 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee5(_, _ref13) {
-          var args = (0, _objectWithoutProperties3.default)(_ref13, []);
-          return _regenerator2.default.wrap(function _callee5$(_context5) {
-            while (1) {
-              switch (_context5.prev = _context5.next) {
-                case 0:
-                  if (!can(objectName, mutationType, permissions)) {
-                    _context5.next = 6;
-                    break;
+      resolve: (function() {
+        var _ref12 = (0, _asyncToGenerator3.default)(
+          _regenerator2.default.mark(function _callee5(_, _ref13) {
+            var args = (0, _objectWithoutProperties3.default)(_ref13, []);
+            return _regenerator2.default.wrap(
+              function _callee5$(_context5) {
+                while (1) {
+                  switch ((_context5.prev = _context5.next)) {
+                    case 0:
+                      if (!can(objectName, mutationType, permissions)) {
+                        _context5.next = 6;
+                        break;
+                      }
+
+                      _context5.next = 3;
+                      return modelObject.model.remove(args);
+
+                    case 3:
+                      _context5.t0 = _context5.sent;
+                      _context5.next = 7;
+                      break;
+
+                    case 6:
+                      _context5.t0 = (0, _graphqlServerExpress.formatError)(
+                        errorObj({ _error: "Permission denied" })
+                      );
+
+                    case 7:
+                      return _context5.abrupt("return", _context5.t0);
+
+                    case 8:
+                    case "end":
+                      return _context5.stop();
                   }
-
-                  _context5.next = 3;
-                  return modelObject.model.remove(args);
-
-                case 3:
-                  _context5.t0 = _context5.sent;
-                  _context5.next = 7;
-                  break;
-
-                case 6:
-                  _context5.t0 = permissionDenied;
-
-                case 7:
-                  return _context5.abrupt('return', _context5.t0);
-
-                case 8:
-                case 'end':
-                  return _context5.stop();
-              }
-            }
-          }, _callee5, this);
-        }));
+                }
+              },
+              _callee5,
+              this
+            );
+          })
+        );
 
         function resolve(_x13, _x14) {
           return _ref12.apply(this, arguments);
         }
 
         return resolve;
-      }()
+      })()
     };
   });
 
@@ -449,7 +561,6 @@ function generateRemoveMutations(ObjectTypes, modelObjects) {
 }
 
 function autoGenerateGraphQLSchema(dataRequirements, modelObjects) {
-
   // Generate GraphQL Object Types for all Mongo Models
   var gqlObjectTypes = generateObjectTypes(dataRequirements);
 
@@ -459,7 +570,7 @@ function autoGenerateGraphQLSchema(dataRequirements, modelObjects) {
   var allQueries = (0, _extends3.default)({}, getQueries, listQueries);
 
   var rootQuery = new _graphql.GraphQLObjectType({
-    name: 'RootQuery',
+    name: "RootQuery",
     fields: allQueries
   });
 
@@ -467,10 +578,15 @@ function autoGenerateGraphQLSchema(dataRequirements, modelObjects) {
   var createMutation = generateCreateMutations(gqlObjectTypes, modelObjects);
   var updateMutations = generateUpdateMutations(gqlObjectTypes, modelObjects);
   var removeMutations = generateRemoveMutations(gqlObjectTypes, modelObjects);
-  var allMutations = (0, _extends3.default)({}, createMutation, updateMutations, removeMutations);
+  var allMutations = (0, _extends3.default)(
+    {},
+    createMutation,
+    updateMutations,
+    removeMutations
+  );
 
   var rootMutation = new _graphql.GraphQLObjectType({
-    name: 'RootMutation',
+    name: "RootMutation",
     fields: allMutations
   });
 
